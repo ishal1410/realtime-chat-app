@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-app
+  labels:
+    app: chat-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: chat-app
+  template:
+    metadata:
+      labels:
+        app: chat-app
+    spec:
+      containers:
+        - name: chat-app
+          image: ishal1410/realtime-chat-app:latest
+          ports:
+            - containerPort: 4000
+          env:
+            - name: PORT
+              value: "4000"
+            - name: DB_HOST
+              value: postgres-service
+            - name: REDIS_HOST
+              value: redis-service
+            - name: KAFKA_BROKER
+              value: kafka-service:9092
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: chat-secrets
+                  key: jwt-secret
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "250m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-app-service
+spec:
+  selector:
+    app: chat-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 4000
+  type: LoadBalancer
