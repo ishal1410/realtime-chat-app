@@ -1,5 +1,6 @@
 import express from 'express';
 import http from 'http';
+import path from 'path';
 import { WebSocketServer } from 'ws';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express5';
@@ -11,6 +12,7 @@ import { connectDB } from './db/postgres';
 import { connectRedis, redisClient } from './services/redis';
 import { connectKafka, disconnectKafka } from './services/kafka';
 import { authMiddleware } from './middleware/auth';
+import { initBroadcaster } from './services/broadcaster';
 import { logger } from './logger';
 import dotenv from 'dotenv';
 
@@ -24,6 +26,7 @@ if (!process.env.JWT_SECRET) {
 const app = express();
 const httpServer = http.createServer(app);
 const wss = new WebSocketServer({ server: httpServer });
+initBroadcaster(wss);
 
 // ─── Middleware ────────────────────────────────────────────────────────────────
 
@@ -47,6 +50,9 @@ app.use(
 );
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
+
+// Serve the chat UI
+app.use(express.static(path.join(__dirname, '../public')));
 
 // ─── WebSocket ─────────────────────────────────────────────────────────────────
 

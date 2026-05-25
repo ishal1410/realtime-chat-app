@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChatApp</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    #messages { scroll-behavior: smooth; }
+    .msg-bubble { max-width: 68%; word-break: break-word; }
+    input:focus { outline: none; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+  </style>
+</head>
+
+<body class="bg-gray-900 text-white h-screen overflow-hidden">
+
+<!-- ─── AUTH SCREEN ────────────────────────────────────────────────────────── -->
+<div id="auth-screen" class="h-screen flex items-center justify-center px-4">
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-8">
+      <div class="text-5xl mb-3">💬</div>
+      <h1 class="text-3xl font-bold">ChatApp</h1>
+      <p class="text-gray-400 mt-2 text-sm">Real-time · WebSockets · Redis · GraphQL</p>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-6 shadow-2xl border border-gray-700">
+      <!-- Tabs -->
+      <div class="flex mb-5 bg-gray-900 rounded-xl p-1 gap-1">
+        <button id="tab-reg" onclick="switchTab('register')"
+          class="flex-1 py-2 rounded-lg text-sm font-semibold transition-all bg-indigo-600 text-white">
+          Register
+        </button>
+        <button id="tab-log" onclick="switchTab('login')"
+          class="flex-1 py-2 rounded-lg text-sm font-semibold transition-all text-gray-400 hover:text-white">
+          Sign In
+        </button>
+      </div>
+
+      <!-- Error banner -->
+      <div id="auth-error" class="hidden mb-4 px-4 py-3 bg-red-900/40 border border-red-500/50 rounded-xl text-red-300 text-sm"></div>
+
+      <!-- Register -->
+      <form id="f-register" onsubmit="doRegister(event)" class="space-y-3">
+        <input id="r-username" type="text" placeholder="Username (3–50 chars)" minlength="3" maxlength="50" required
+          class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-xl text-sm placeholder-gray-500 focus:border-indigo-500 transition" />
+        <input id="r-email" type="email" placeholder="Email" required
+          class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-xl text-sm placeholder-gray-500 focus:border-indigo-500 transition" />
+        <input id="r-password" type="password" placeholder="Password (8+ chars)" minlength="8" required
+          class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-xl text-sm placeholder-gray-500 focus:border-indigo-500 transition" />
+        <button type="submit"
+          class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 rounded-xl text-sm font-semibold transition-all mt-1">
+          Create Account →
+        </button>
+      </form>
+
+      <!-- Login -->
+      <form id="f-login" onsubmit="doLogin(event)" class="space-y-3 hidden">
+        <input id="l-email" type="email" placeholder="Email" required
+          class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-xl text-sm placeholder-gray-500 focus:border-indigo-500 transition" />
+        <input id="l-password" type="password" placeholder="Password" required
+          class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-xl text-sm placeholder-gray-500 focus:border-indigo-500 transition" />
+        <button type="submit"
+          class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 rounded-xl text-sm font-semibold transition-all mt-1">
+          Sign In →
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ─── MAIN APP ───────────────────────────────────────────────────────────── -->
+<div id="app" class="hidden h-screen flex flex-col">
+
+  <!-- Top bar -->
+  <header class="flex items-center justify-between px-5 py-3 bg-gray-800 border-b border-gray-700/80 shrink-0">
+    <div class="flex items-center gap-2">
+      <span class="text-lg">💬</span>
+      <span class="font-bold text-base">ChatApp</span>
+      <span id="ws-dot" class="w-2 h-2 rounded-full bg-gray-600 ml-1" title="WebSocket"></span>
+    </div>
+    <div class="flex items-center gap-4">
+      <span class="text-sm text-gray-400">
+        <span class="text-white font-medium" id="hdr-user"></span>
+      </span>
+      <button onclick="logout()"
+        class="text-xs text-gray-500 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition">
+        Sign out
+      </button>
+    </div>
+  </header>
+
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="w-60 bg-gray-800 border-r border-gray-700/80 flex flex-col shrink-0">
+      <div class="p-4 border-b border-gray-700/80">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Rooms</span>
+          <button onclick="toggleNewRoom()"
+            class="w-6 h-6 flex items-center justify-center rounded-md bg-gray-700 hover:bg-indigo-600 text-gray-400 hover:text-white transition text-lg leading-none"
+            title="New room">+</button>
+        </div>
+        <!-- Inline new-room form -->
+        <div id="new-room-box" class="hidden">
+          <input id="new-room-input" type="text" placeholder="Room name…" maxlength="100"
+            onkeydown="if(event.key==='Enter')createRoom(); if(event.key==='Escape')toggleNewRoom();"
+            class="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm placeholder-gray-500 focus:border-indigo-500 transition mb-2" />
+          <div class="flex gap-2">
+            <button onclick="createRoom()" class="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-medium transition">Create</button>
+            <button onclick="toggleNewRoom()" class="flex-1 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs font-medium transition">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <nav id="room-list" class="flex-1 overflow-y-auto p-2 space-y-0.5">
+        <p class="text-xs text-gray-600 px-3 pt-2">No rooms yet</p>
+      </nav>
+    </aside>
+
+    <!-- Chat pane -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+
+      <!-- Room header -->
+      <div class="px-5 py-3 border-b border-gray-700/80 bg-gray-850 shrink-0 min-h-[52px] flex items-center">
+        <span id="room-header" class="text-gray-500 text-sm">← Select a room</span>
+      </div>
+
+      <!-- Messages -->
+      <div id="messages" class="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+        <div id="empty-state" class="h-full flex flex-col items-center justify-center text-gray-600 select-none">
+          <div class="text-5xl mb-4 opacity-30">💬</div>
+          <p class="text-sm">Pick a room and start chatting</p>
+        </div>
+      </div>
+
+      <!-- Input bar -->
+      <div class="shrink-0 px-4 py-3 bg-gray-800 border-t border-gray-700/80">
+        <form onsubmit="sendMessage(event)" class="flex gap-2">
+          <input id="msg-input" type="text" placeholder="Select a room first…" disabled maxlength="2000"
+            class="flex-1 px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm placeholder-gray-600 focus:border-indigo-500 transition disabled:opacity-40 disabled:cursor-not-allowed" />
+          <button id="send-btn" type="submit" disabled
+            class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
+            Send
+          </button>
+        </form>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const GQL  = `${location.protocol}//${location.hostname}:4000/graphql`;
+const WS_URL = `ws://${location.hostname}:4000`;
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let token       = localStorage.getItem('chat_token');
+let currentUser = JSON.parse(localStorage.getItem('chat_user') || 'null');
+let activeRoomId   = null;
+let activeRoomName = '';
+let ws = null;
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+(function init() {
+  if (token && currentUser) { showApp(); }
+})();
+
+// ── Auth UI ───────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  const isReg = tab === 'register';
+  document.getElementById('f-register').classList.toggle('hidden', !isReg);
+  document.getElementById('f-login').classList.toggle('hidden', isReg);
+  document.getElementById('tab-reg').className = isReg
+    ? 'flex-1 py-2 rounded-lg text-sm font-semibold transition-all bg-indigo-600 text-white'
+    : 'flex-1 py-2 rounded-lg text-sm font-semibold transition-all text-gray-400 hover:text-white';
+  document.getElementById('tab-log').className = isReg
+    ? 'flex-1 py-2 rounded-lg text-sm font-semibold transition-all text-gray-400 hover:text-white'
+    : 'flex-1 py-2 rounded-lg text-sm font-semibold transition-all bg-indigo-600 text-white';
+  clearAuthError();
+}
+
+function authError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+function clearAuthError() { document.getElementById('auth-error').classList.add('hidden'); }
+
+// ── GraphQL helper ────────────────────────────────────────────────────────────
+async function gql(query, vars = {}, auth = false) {
+  const hdrs = { 'Content-Type': 'application/json' };
+  if (auth) hdrs['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(GQL, { method: 'POST', headers: hdrs, body: JSON.stringify({ query, variables: vars }) });
+  return res.json();
+}
+
+// ── Register / Login ──────────────────────────────────────────────────────────
+async function doRegister(e) {
+  e.preventDefault(); clearAuthError();
+  try {
+    const { data, errors } = await gql(
+      `mutation($u:String!,$e:String!,$p:String!){register(username:$u,email:$e,password:$p){token user{id username email}}}`,
+      { u: document.getElementById('r-username').value, e: document.getElementById('r-email').value, p: document.getElementById('r-password').value }
+    );
+    if (errors) return authError(errors[0].message);
+    persist(data.register.token, data.register.user);
+    showApp();
+  } catch { authError('Cannot reach server — is npm run dev running?'); }
+}
+
+async function doLogin(e) {
+  e.preventDefault(); clearAuthError();
+  try {
+    const { data, errors } = await gql(
+      `mutation($e:String!,$p:String!){login(email:$e,password:$p){token user{id username email}}}`,
+      { e: document.getElementById('l-email').value, p: document.getElementById('l-password').value }
+    );
+    if (errors) return authError(errors[0].message);
+    persist(data.login.token, data.login.user);
+    showApp();
+  } catch { authError('Cannot reach server — is npm run dev running?'); }
+}
+
+function persist(t, u) {
+  token = t; currentUser = u;
+  localStorage.setItem('chat_token', t);
+  localStorage.setItem('chat_user', JSON.stringify(u));
+}
+
+function logout() {
+  localStorage.removeItem('chat_token');
+  localStorage.removeItem('chat_user');
+  if (ws) ws.close();
+  location.reload();
+}
+
+// ── Show App ──────────────────────────────────────────────────────────────────
+function showApp() {
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('hdr-user').textContent = currentUser.username;
+  loadRooms();
+  connectWS();
+}
+
+// ── Rooms ─────────────────────────────────────────────────────────────────────
+async function loadRooms() {
+  const { data } = await gql(`{ rooms { id name } }`, {}, true);
+  const nav = document.getElementById('room-list');
+  nav.innerHTML = '';
+  if (!data?.rooms?.length) {
+    nav.innerHTML = '<p class="text-xs text-gray-600 px-3 pt-2">No rooms yet — create one!</p>';
+    return;
+  }
+  data.rooms.forEach(r => addRoomBtn(r));
+}
+
+function addRoomBtn(room) {
+  if (document.getElementById(`r-${room.id}`)) return;
+  const nav = document.getElementById('room-list');
+  // Remove the placeholder text if present
+  const placeholder = nav.querySelector('p');
+  if (placeholder) placeholder.remove();
+
+  const btn = document.createElement('button');
+  btn.id = `r-${room.id}`;
+  btn.className = 'w-full text-left px-3 py-2 rounded-lg text-sm text-gray-400 hover:bg-gray-700/60 hover:text-gray-100 transition flex items-center gap-2 group';
+  btn.innerHTML = `<span class="text-gray-600 group-hover:text-gray-400 transition">#</span><span class="truncate">${esc(room.name)}</span>`;
+  btn.onclick = () => selectRoom(room.id, room.name);
+  nav.appendChild(btn);
+}
+
+function selectRoom(id, name) {
+  activeRoomId = String(id); activeRoomName = name;
+  // Highlight active
+  document.querySelectorAll('#room-list button').forEach(b => {
+    b.classList.remove('bg-gray-700/80', 'text-white');
+    b.classList.add('text-gray-400');
+  });
+  const btn = document.getElementById(`r-${id}`);
+  if (btn) { btn.classList.add('bg-gray-700/80', 'text-white'); btn.classList.remove('text-gray-400'); }
+
+  document.getElementById('room-header').innerHTML =
+    `<span class="text-gray-400 mr-1">#</span><span class="font-semibold text-white">${esc(name)}</span>`;
+  document.getElementById('msg-input').disabled = false;
+  document.getElementById('msg-input').placeholder = `Message #${name}…`;
+  document.getElementById('send-btn').disabled = false;
+  document.getElementById('msg-input').focus();
+
+  loadMessages(id);
+}
+
+function toggleNewRoom() {
+  const box = document.getElementById('new-room-box');
+  box.classList.toggle('hidden');
+  if (!box.classList.contains('hidden')) document.getElementById('new-room-input').focus();
+}
+
+async function createRoom() {
+  const name = document.getElementById('new-room-input').value.trim();
+  if (!name) return;
+  const { data, errors } = await gql(
+    `mutation($n:String!){createRoom(name:$n){id name}}`, { n: name }, true
+  );
+  if (errors) return alert(errors[0].message);
+  document.getElementById('new-room-input').value = '';
+  toggleNewRoom();
+  addRoomBtn(data.createRoom);
+  selectRoom(data.createRoom.id, data.createRoom.name);
+}
+
+// ── Messages ──────────────────────────────────────────────────────────────────
+async function loadMessages(roomId) {
+  const box = document.getElementById('messages');
+  box.innerHTML = '<div class="text-center text-gray-600 text-sm pt-8">Loading…</div>';
+
+  const { data, errors } = await gql(
+    `query($r:ID!){messages(roomId:$r){id content createdAt sender{id username}}}`,
+    { r: roomId }, true
+  );
+  box.innerHTML = '';
+  if (errors || !data?.messages?.length) {
+    box.innerHTML = '<div class="text-center text-gray-600 text-sm pt-8">No messages yet — say hello! 👋</div>';
+    return;
+  }
+  [...data.messages].reverse().forEach(m => appendMsg(m));
+  scrollDown();
+}
+
+function appendMsg(msg) {
+  const box = document.getElementById('messages');
+  // Remove placeholder texts
+  const ph = box.querySelector('div:not(.flex)');
+  if (ph) ph.remove();
+  const empty = document.getElementById('empty-state');
+  if (empty) empty.remove();
+
+  const mine = String(msg.sender.id) === String(currentUser.id);
+  const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const wrap = document.createElement('div');
+  wrap.className = `flex ${mine ? 'justify-end' : 'justify-start'} items-end gap-2`;
+
+  if (mine) {
+    wrap.innerHTML = `
+      <span class="text-xs text-gray-600 mb-0.5">${time}</span>
+      <div class="msg-bubble bg-indigo-600 text-white rounded-2xl rounded-br-none px-4 py-2.5 text-sm leading-relaxed shadow-sm">
+        ${esc(msg.content)}
+      </div>`;
+  } else {
+    wrap.innerHTML = `
+      <div class="msg-bubble bg-gray-700 rounded-2xl rounded-bl-none px-4 py-2.5 text-sm leading-relaxed shadow-sm">
+        <p class="text-indigo-400 text-xs font-semibold mb-1">${esc(msg.sender.username)}</p>
+        ${esc(msg.content)}
+      </div>
+      <span class="text-xs text-gray-600 mb-0.5">${time}</span>`;
+  }
+
+  box.appendChild(wrap);
+}
+
+function scrollDown() {
+  const box = document.getElementById('messages');
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendMessage(e) {
+  e.preventDefault();
+  const input = document.getElementById('msg-input');
+  const content = input.value.trim();
+  if (!content || !activeRoomId) return;
+  input.value = '';
+  const { errors } = await gql(
+    `mutation($r:ID!,$c:String!){sendMessage(roomId:$r,content:$c){id}}`,
+    { r: activeRoomId, c: content }, true
+  );
+  if (errors) alert(errors[0].message);
+  // Message arrives via WebSocket broadcast — no need to add it manually
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connectWS() {
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    document.getElementById('ws-dot').className = 'w-2 h-2 rounded-full bg-green-500 ml-1';
+    document.getElementById('ws-dot').title = 'Connected';
+  };
+
+  ws.onmessage = ({ data }) => {
+    try {
+      const payload = JSON.parse(data);
+      if (payload.type === 'new_message' && payload.roomId === activeRoomId) {
+        appendMsg(payload.message);
+        scrollDown();
+      }
+    } catch { /* ignore malformed frames */ }
+  };
+
+  ws.onclose = () => {
+    document.getElementById('ws-dot').className = 'w-2 h-2 rounded-full bg-yellow-500 ml-1';
+    document.getElementById('ws-dot').title = 'Reconnecting…';
+    setTimeout(connectWS, 3000);
+  };
+
+  ws.onerror = () => {
+    document.getElementById('ws-dot').className = 'w-2 h-2 rounded-full bg-red-500 ml-1';
+  };
+}
+
+// ── Util ──────────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

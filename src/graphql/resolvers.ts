@@ -1,6 +1,7 @@
 import { pool } from '../db/postgres';
 import { redisClient } from '../services/redis';
 import { publishMessage } from '../services/kafka';
+import { broadcast } from '../services/broadcaster';
 import { createUserLoader } from './loaders';
 import {
   validateUsername,
@@ -116,6 +117,26 @@ export const resolvers = {
         [trimmedContent, userId, roomId],
       );
       const message = result.rows[0];
+
+      // Fetch sender for the WS broadcast (so all clients get full message shape)
+      const senderResult = await pool.query(
+        'SELECT id, username FROM users WHERE id = $1',
+        [userId],
+      );
+      const sender = senderResult.rows[0];
+
+      // Broadcast to every connected WebSocket client — this is what makes it realtime
+      broadcast({
+        type: 'new_message',
+        roomId: String(roomId),
+        message: {
+          id: String(message.id),
+          content: message.content,
+          createdAt: new Date(message.created_at).toISOString(),
+          sender: { id: String(sender.id), username: sender.username },
+        },
+      });
+
       await publishMessage({ roomId, message });
       await redisClient.del(`messages:${roomId}`);
       return message;
