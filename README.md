@@ -1,136 +1,101 @@
-# Real-Time Chat Application
+# Real-Time Chat App
 
-A production-grade real-time chat application built with modern backend technologies including GraphQL, WebSockets, Redis, Kafka, Docker, and Kubernetes.
+Production-grade chat application with WebSockets, GraphQL, Redis Pub/Sub, and Kafka event streaming — fully containerized and Kubernetes-ready.
 
-## Tech Stack
+![TypeScript](https://img.shields.io/badge/TypeScript-blue?logo=typescript&logoColor=white) ![Node.js](https://img.shields.io/badge/Node.js-green?logo=node.js&logoColor=white) ![GraphQL](https://img.shields.io/badge/GraphQL-E10098?logo=graphql&logoColor=white) ![Redis](https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=white) ![Kafka](https://img.shields.io/badge/Kafka-231F20?logo=apachekafka&logoColor=white) ![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?logo=kubernetes&logoColor=white) ![License](https://img.shields.io/badge/license-MIT-orange)
 
-- **Runtime**: Node.js + TypeScript
-- **API**: GraphQL (Apollo Server v5) + REST
-- **Real-time**: WebSockets (ws)
-- **Cache**: Redis (ioredis) with Pub/Sub
-- **Message Queue**: Apache Kafka (kafkajs)
-- **Database**: PostgreSQL
-- **Auth**: JWT + bcrypt
-- **DevOps**: Docker, Docker Compose, Kubernetes
-- **Testing**: Jest + ts-jest
-- **CI/CD**: GitHub Actions
+---
 
 ## Architecture
 
 ```
-Client <──> WebSocket Server   (real-time messaging)
-Client <──> GraphQL API        (queries & mutations)
-GraphQL ──> PostgreSQL         (persistent storage)
-GraphQL ──> Redis              (caching & pub/sub)
-GraphQL ──> Kafka              (async event streaming)
+Client
+  │
+  ├── WebSocket ──→ WS Server ──→ Redis Pub/Sub ──→ broadcast to all clients
+  │
+  └── GraphQL ───→ Apollo Server ──→ PostgreSQL
+                          │
+                          └──→ Kafka ──→ async event streaming
 ```
+
+---
+
+## Tech Stack
+
+| Layer | Tech |
+|---|---|
+| Runtime | Node.js + TypeScript |
+| API | GraphQL (Apollo Server v5) + REST |
+| Real-time | WebSockets (ws) |
+| Cache + Pub/Sub | Redis (ioredis) |
+| Message Queue | Apache Kafka (kafkajs) |
+| Database | PostgreSQL |
+| Auth | JWT + bcrypt |
+| Containers | Docker + Docker Compose |
+| Orchestration | Kubernetes |
+| Testing | Jest + ts-jest |
+| CI/CD | GitHub Actions |
+
+---
 
 ## Features
 
-- Real-time messaging via WebSockets
-- GraphQL API for rooms, users, messages
-- Redis caching for fast message retrieval
-- Kafka for async event-driven notification delivery
-- JWT-based authentication with bcrypt password hashing
-- Dockerized for easy local and cloud deployment
-- Kubernetes-ready configuration
+- **Real-time messaging** via WebSocket connections with Redis Pub/Sub fan-out
+- **GraphQL API** for rooms, users, and message history
+- **Kafka event streaming** for async notifications and decoupled services
+- **JWT authentication** with bcrypt password hashing
+- **Redis caching** for fast message retrieval
+- **Full test coverage** with Jest
+- **CI/CD pipeline** via GitHub Actions
+- **Kubernetes manifests** for production deployment
 
-## Getting Started
+---
 
-### With Docker Compose
+## Quick Start
+
+**With Docker (recommended):**
 ```bash
+git clone https://github.com/ishal1410/realtime-chat-app.git
+cd realtime-chat-app
 docker-compose up --build
 ```
 
-### Local Development
+GraphQL Playground → [http://localhost:4000/graphql](http://localhost:4000/graphql)
+
+**Local development:**
 ```bash
 npm install
 npm run dev
 ```
 
-### Build
-```bash
-npm run build
-```
-
-### Run Tests
+**Run tests:**
 ```bash
 npm test
 ```
 
-## API
-
-GraphQL playground available at: `http://localhost:4000/graphql`
-
-### Example Mutations
-
-```graphql
-mutation Register {
-  register(username: "vishal", email: "v@test.com", password: "pass123") {
-    token
-    user { id username email }
-  }
-}
-
-mutation Login {
-  login(email: "v@test.com", password: "pass123") {
-    token
-    user { id username }
-  }
-}
-
-mutation SendMessage {
-  sendMessage(roomId: "1", content: "Hello World!") {
-    id content createdAt
-  }
-}
-```
-
-### Example Queries
-
-```graphql
-query GetRooms {
-  rooms {
-    id name
-  }
-}
-
-query GetMessages {
-  messages(roomId: "1") {
-    id content
-    sender { username }
-  }
-}
-```
+---
 
 ## Project Structure
 
 ```
 src/
-├── index.ts              # Entry point
+├── index.ts              # Entry point — HTTP + WebSocket server
 ├── graphql/
-│   ├── schema.ts         # GraphQL type definitions
-│   └── resolvers.ts      # GraphQL resolvers
+│   ├── schema.ts         # Type definitions
+│   └── resolvers.ts      # Query/Mutation resolvers
 ├── services/
-│   ├── redis.ts          # Redis client & connection
-│   └── kafka.ts          # Kafka producer & consumer
+│   ├── redis.ts          # Redis client + Pub/Sub
+│   └── kafka.ts          # Kafka producer/consumer
 ├── db/
-│   └── postgres.ts       # PostgreSQL pool & migrations
+│   └── postgres.ts       # PostgreSQL connection
 └── middleware/
-    └── auth.ts           # JWT authentication middleware
+    └── auth.ts           # JWT verification
+k8s/                      # Kubernetes manifests
+.github/workflows/        # CI/CD pipeline
 ```
 
-## Environment Variables
+---
 
-```env
-PORT=4000
-JWT_SECRET=your_secret
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=chatapp
-DB_USER=postgres
-DB_PASSWORD=postgres
-REDIS_HOST=localhost
-REDIS_PORT=6379
-KAFKA_BROKER=localhost:9092
-```
+## License
+
+MIT
