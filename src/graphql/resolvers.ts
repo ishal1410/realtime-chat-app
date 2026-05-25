@@ -138,15 +138,43 @@ export const resolvers = {
     },
   },
 
+  // ── Field resolvers: map Postgres snake_case columns to GraphQL camelCase ──
+
+  User: {
+    createdAt: (user: any) => new Date(user.created_at).toISOString(),
+  },
+
   Message: {
+    senderId:  (msg: any) => msg.sender_id,
+    roomId:    (msg: any) => msg.room_id,
+    createdAt: (msg: any) => new Date(msg.created_at).toISOString(),
     /**
-     * Uses a per-request DataLoader (injected via Apollo context) to batch all
-     * sender lookups into one query — eliminates the N+1 problem.
+     * Uses a per-request DataLoader to batch all sender lookups into one query
+     * — eliminates the N+1 problem when listing many messages.
      */
     sender: async (message: { sender_id: number }, _: unknown, context: any) => {
       return (context.userLoader as ReturnType<typeof createUserLoader>).load(
         String(message.sender_id),
       );
+    },
+  },
+
+  Room: {
+    members: async (room: { id: number }) => {
+      const result = await pool.query(
+        `SELECT u.* FROM users u
+         JOIN room_members rm ON rm.user_id = u.id
+         WHERE rm.room_id = $1`,
+        [room.id],
+      );
+      return result.rows;
+    },
+    messages: async (room: { id: number }) => {
+      const result = await pool.query(
+        'SELECT * FROM messages WHERE room_id = $1 ORDER BY created_at DESC LIMIT 50',
+        [room.id],
+      );
+      return result.rows;
     },
   },
 };
