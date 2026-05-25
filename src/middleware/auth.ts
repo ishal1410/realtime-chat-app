@@ -1,16 +1,32 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-export function authMiddleware(req: Request, res: Response, next: NextFunction) {
-  const token = req.headers.authorization?.replace('Bearer ', '');
+/**
+ * Validates the Bearer token when present.
+ * - No token  → unauthenticated, but allowed (public resolvers handle their own auth check)
+ * - Bad/expired token → 401 immediately (prevents callers from smuggling invalid tokens)
+ */
+export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
+  const authHeader = req.headers.authorization;
 
-  if (token) {
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as { userId: string };
-      (req as any).userId = decoded.userId;
-    } catch (err) {
-      console.warn('Invalid token');
-    }
+  if (!authHeader?.startsWith('Bearer ')) {
+    // No credential provided — let resolvers decide if auth is required
+    return next();
   }
-  next();
+
+  const token = authHeader.slice(7);
+  const secret = process.env.JWT_SECRET;
+
+  if (!secret) {
+    res.status(500).json({ error: 'Server misconfiguration: JWT_SECRET is not set' });
+    return;
+  }
+
+  try {
+    const decoded = jwt.verify(token, secret) as { userId: string };
+    (req as any).userId = decoded.userId;
+    next();
+  } catch {
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
 }

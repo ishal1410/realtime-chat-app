@@ -36,6 +36,11 @@ export async function connectDB() {
         room_id INTEGER REFERENCES rooms(id),
         created_at TIMESTAMP DEFAULT NOW()
       );
+
+      -- Indexes for common query patterns
+      CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id);
+      CREATE INDEX IF NOT EXISTS idx_room_members_user_id ON room_members(user_id);
     `);
     console.log('PostgreSQL connected and tables ready');
   } catch (err) {
